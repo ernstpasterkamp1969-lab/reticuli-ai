@@ -43,11 +43,11 @@ const MarkdownText: React.FC<{ text: string; color: string }> = ({ text, color }
     let i = 0;
     while (remaining.length > 0) {
       // **vet**
-      const bold = remaining.match(/^(.*?)\*\*(.+?)\*\*(.*)/s);
+      const bold = remaining.match(/^([\s\S]*?)\*\*(.+?)\*\*([\s\S]*)/);
       // *cursief*
-      const italic = remaining.match(/^(.*?)\*(.+?)\*(.*)/s);
+      const italic = remaining.match(/^([\s\S]*?)\*(.+?)\*([\s\S]*)/);
       // `code`
-      const code = remaining.match(/^(.*?)`(.+?)`(.*)/s);
+      const code = remaining.match(/^([\s\S]*?)`(.+?)`([\s\S]*)/);
 
       const firstBold = bold ? (bold[1]?.length ?? 0) : Infinity;
       const firstItalic = italic ? (italic[1]?.length ?? 0) : Infinity;
@@ -165,9 +165,8 @@ const BootAnimation: React.FC<{ onComplete: () => void }> = ({ onComplete }) => 
 // ============================================================
 // HOLOGRAM RETI COMPONENT
 // ============================================================
-const HologramReti: React.FC<{ isSpeaking: boolean; visible: boolean; menuOpen: boolean }> = ({ isSpeaking, visible, menuOpen }) => {
+const HologramReti: React.FC<{ isSpeaking: boolean; visible: boolean; menuOpen: boolean }> = ({ isSpeaking: _isSpeaking, visible, menuOpen }) => {
   const [glitch, setGlitch] = useState(false);
-  const [dotSize, setDotSize] = useState(6);
 
   // Occasionele glitch
   useEffect(() => {
@@ -179,15 +178,6 @@ const HologramReti: React.FC<{ isSpeaking: boolean; visible: boolean; menuOpen: 
     }, 2000);
     return () => clearInterval(glitchInterval);
   }, []);
-
-  // Dot pulseert als Reti spreekt
-  useEffect(() => {
-    if (!isSpeaking) { setDotSize(6); return; }
-    const pulse = setInterval(() => {
-      setDotSize(6 + Math.random() * 10);
-    }, 120);
-    return () => clearInterval(pulse);
-  }, [isSpeaking]);
 
   const shouldShow = visible && !menuOpen;
 
@@ -786,7 +776,7 @@ const App: React.FC = () => {
   // RENDER
   // ============================================================
   return (
-    <div style={{ backgroundColor:'#000', color:'white', height:'100vh', width:'100vw', display:'flex', flexDirection:'column', position:'fixed', inset:0, overflow:'hidden', backgroundImage:"url('/aangepast-bg.png')", backgroundSize:'cover', backgroundPosition:'center' }}>
+    <div style={{ backgroundColor:'#000', color:'white', height:'100dvh', width:'100vw', display:'flex', flexDirection:'column', position:'fixed', inset:0, overflow:'hidden', backgroundImage:"url('/aangepast-bg.png')", backgroundSize:'cover', backgroundPosition:'center bottom' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
         @font-face { font-family: 'SpaceAge'; src: url('/space age.ttf') format('truetype'); }
@@ -1075,7 +1065,7 @@ const App: React.FC = () => {
           )}
 
           {/* CHAT INPUT */}
-          <div style={{ padding:'16px 20px', zIndex:200, borderTop:'1px solid rgba(34,211,238,0.1)', position:'relative' }}>
+          <div style={{ padding:'12px 16px', paddingBottom:'calc(12px + env(safe-area-inset-bottom, 0px))', zIndex:200, borderTop:'1px solid rgba(34,211,238,0.1)', background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', flexShrink:0 }}>
             <div style={{ maxWidth:'760px', margin:'0 auto', display:'flex', alignItems:'flex-end', gap:'10px' }}>
               <input type="file" ref={fileRef} style={{ display:'none' }} onChange={handleFileChange} accept="image/*" />
               <input type="file" ref={cameraRef} style={{ display:'none' }} onChange={handleFileChange} accept="image/*" capture="environment" />
