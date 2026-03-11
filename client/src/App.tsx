@@ -80,10 +80,10 @@ const MarkdownText: React.FC<{ text: string; color: string }> = ({ text, color }
 
 const BootAnimation: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const [phase, setPhase] = useState<'logo' | 'boot' | 'fadeout'>('logo');
-  const [lines, setLines] = useState<string[]>([]);
+  const [shownLines, setShownLines] = useState<string[]>([]);
   const [logoOpacity, setLogoOpacity] = useState(0);
 
-  const bootLines = [
+  const BOOT_LINES = [
     'INITIALIZING NEURAL NETWORK...',
     'LOADING LANGUAGE MODULES... OK',
     'CONNECTING TO QUANTUM CORE... OK',
@@ -94,17 +94,17 @@ const BootAnimation: React.FC<{ onComplete: () => void }> = ({ onComplete }) => 
   ];
 
   useEffect(() => {
-    // Fase 1: Logo infaden
-    setTimeout(() => setLogoOpacity(1), 100);
-    setTimeout(() => setPhase('boot'), 1400);
+    const t1 = setTimeout(() => setLogoOpacity(1), 200);
+    const t2 = setTimeout(() => setPhase('boot'), 1400);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
   useEffect(() => {
     if (phase !== 'boot') return;
     let i = 0;
     const interval = setInterval(() => {
-      if (i < bootLines.length) {
-        setLines(prev => [...prev, bootLines[i]]);
+      if (i < BOOT_LINES.length) {
+        setShownLines(prev => [...prev, BOOT_LINES[i]]);
         i++;
       } else {
         clearInterval(interval);
@@ -117,47 +117,22 @@ const BootAnimation: React.FC<{ onComplete: () => void }> = ({ onComplete }) => 
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: '#000',
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      opacity: phase === 'fadeout' ? 0 : 1,
-      transition: 'opacity 0.6s ease',
+      position:'fixed', inset:0, zIndex:9999, background:'#000',
+      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      opacity: phase === 'fadeout' ? 0 : 1, transition:'opacity 0.6s ease',
     }}>
-      {/* Logo */}
-      <div style={{
-        opacity: logoOpacity,
-        transition: 'opacity 1s ease',
-        textAlign: 'center',
-        marginBottom: '40px',
-      }}>
-        <div className="space-age" style={{
-          fontSize: '32px', letterSpacing: '12px', color: '#22d3ee',
-          textShadow: '0 0 30px rgba(34,211,238,0.8), 0 0 60px rgba(34,211,238,0.4)',
-        }}>RETICULI</div>
-        <div className="orb" style={{ fontSize: '10px', letterSpacing: '6px', color: 'rgba(34,211,238,0.5)', marginTop: '8px' }}>
-          NEURAL AI SYSTEM
-        </div>
+      <div style={{ opacity:logoOpacity, transition:'opacity 1s ease', textAlign:'center', marginBottom:'40px' }}>
+        <div className="space-age" style={{ fontSize:'32px', letterSpacing:'12px', color:'#22d3ee', textShadow:'0 0 30px rgba(34,211,238,0.8), 0 0 60px rgba(34,211,238,0.4)' }}>RETICULI</div>
+        <div className="orb" style={{ fontSize:'10px', letterSpacing:'6px', color:'rgba(34,211,238,0.5)', marginTop:'8px' }}>NEURAL AI SYSTEM</div>
       </div>
-      {/* Boot tekst */}
       {phase === 'boot' && (
-        <div style={{
-          fontFamily: 'monospace', fontSize: '11px',
-          color: 'rgba(34,211,238,0.7)', lineHeight: '2',
-          width: '320px', textAlign: 'left',
-        }}>
-          {lines.map((line, i) => (
-            <div key={i} style={{
-              opacity: 0, animation: 'bootFadeIn 0.3s forwards',
-              color: (line || '').startsWith('>') ? '#22d3ee' : 'rgba(34,211,238,0.6)',
-              fontWeight: (line || '').startsWith('>') ? 'bold' : 'normal',
-            }}>{line}</div>
+        <div style={{ fontFamily:'monospace', fontSize:'11px', lineHeight:'2', width:'320px', textAlign:'left' }}>
+          {shownLines.map((line, i) => (
+            <div key={i} style={{ opacity:0, animation:'bootFadeIn 0.3s forwards', color:(line||'').startsWith('>')?'#22d3ee':'rgba(34,211,238,0.6)', fontWeight:(line||'').startsWith('>')?'bold':'normal' }}>{line}</div>
           ))}
         </div>
       )}
-      <style>{`
-        @keyframes bootFadeIn { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:translateX(0); } }
-      `}</style>
+      <style>{`@keyframes bootFadeIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}`}</style>
     </div>
   );
 };
@@ -183,7 +158,7 @@ const HologramReti: React.FC<{ isSpeaking: boolean; visible: boolean; menuOpen: 
 
   return (
     <div style={{
-      position: 'fixed', bottom: '10px', left: '-20px', width: '132px', height: '168px',
+      position: 'fixed', bottom: '80px', left: '10px', width: '120px', height: '153px',
       zIndex: 50, pointerEvents: 'none',
       filter: glitch ? 'hue-rotate(90deg) brightness(1.4)' : 'none',
       transform: glitch ? `translateX(${(Math.random()-0.5)*8}px)` : 'none',
@@ -345,6 +320,8 @@ const App: React.FC = () => {
   const [showSystemMsg, setShowSystemMsg] = useState(false);
   const systemMsgShownRef = useRef(false);
   const inactivityTimerRef = useRef<any>(null);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Inactiviteit timer voor systeemmelding
   useEffect(() => {
@@ -455,8 +432,16 @@ const App: React.FC = () => {
     const trySpeak = () => {
       const voices = window.speechSynthesis.getVoices();
       const langCode = lang.slice(0, 2).toLowerCase();
-      const chosen = voices.find(v => v.lang.toLowerCase() === lang.toLowerCase())
-                  || voices.find(v => v.lang.toLowerCase().startsWith(langCode));
+      // Voor Nederlands: altijd nl-NL verkiezen boven nl-BE (Vlaams)
+      let chosen;
+      if (langCode === 'nl') {
+        chosen = voices.find(v => v.lang.toLowerCase() === 'nl-nl' && v.name.toLowerCase().includes('male'))
+              || voices.find(v => v.lang.toLowerCase() === 'nl-nl')
+              || voices.find(v => v.lang.toLowerCase().startsWith('nl') && !v.lang.toLowerCase().includes('be'));
+      } else {
+        chosen = voices.find(v => v.lang.toLowerCase() === lang.toLowerCase())
+              || voices.find(v => v.lang.toLowerCase().startsWith(langCode));
+      }
 
       if (chosen) {
         const utter = new SpeechSynthesisUtterance(clean);
@@ -776,7 +761,7 @@ const App: React.FC = () => {
   // RENDER
   // ============================================================
   return (
-    <div style={{ backgroundColor:'#000', color:'white', height:'100dvh', width:'100vw', display:'flex', flexDirection:'column', position:'fixed', inset:0, overflow:'hidden', backgroundImage:"url('/aangepast-bg.png')", backgroundSize:'cover', backgroundPosition:'center bottom' }}>
+    <div style={{ backgroundColor:'#000', color:'white', height:'100dvh', width:'100vw', display:'flex', flexDirection:'column', position:'fixed', inset:0, overflow:'hidden', backgroundImage:"url('/aangepast-bg.png')", backgroundSize:'contain', backgroundPosition:'center', backgroundRepeat:'no-repeat' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
         @font-face { font-family: 'SpaceAge'; src: url('/space age.ttf') format('truetype'); }
@@ -836,14 +821,11 @@ const App: React.FC = () => {
       {/* INKLAPMENU */}
       {translatorOpen && (
         <div style={{ zIndex:100, borderBottom:'1px solid rgba(34,211,238,0.2)', background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)' }}>
-          <div style={{ display:'flex', gap:'6px', padding:'10px 12px', borderBottom:'1px solid rgba(34,211,238,0.1)', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap' }}>
-            <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
-              <button className={`tab-btn orb ${tab==='image'?'active':''}`} onClick={() => setTab(tab === 'image' ? 'chat' : 'image')} style={{ padding:'7px 10px', fontSize:'10px' }}>🎨 BEELD</button>
-              <button className={`tab-btn orb ${tab==='video'?'active':''}`} onClick={() => setTab(tab === 'video' ? 'chat' : 'video')} style={{ padding:'7px 10px', fontSize:'10px' }}>🎥 VIDEO</button>
-              <button className={`tab-btn orb ${tab==='translator'?'active':''}`} onClick={() => setTab(tab === 'translator' ? 'chat' : 'translator')} style={{ padding:'7px 10px', fontSize:'10px' }}>🌐 VERTAAL</button>
-              <button className={`tab-btn orb ${tab==='history'?'active':''}`} onClick={() => { setTab(tab === 'history' ? 'chat' : 'history'); loadHistory(); }} style={{ padding:'7px 10px', fontSize:'10px' }}>📚 HISTORY</button>
-            </div>
-            <button onClick={() => { setTranslatorOpen(false); setTab('chat'); }} className="orb" style={{ background:'none', border:'1px solid rgba(34,211,238,0.3)', borderRadius:'8px', color:'rgba(34,211,238,0.6)', padding:'4px 10px', cursor:'pointer', fontSize:'11px' }}>✕</button>
+          <div style={{ display:'flex', gap:'6px', padding:'10px 12px', borderBottom:'1px solid rgba(34,211,238,0.1)', alignItems:'center', flexWrap:'wrap' }}>
+            <button className={`tab-btn orb ${tab==='image'?'active':''}`} onClick={() => setTab(tab === 'image' ? 'chat' : 'image')} style={{ padding:'7px 10px', fontSize:'10px' }}>🎨 BEELD</button>
+            <button className={`tab-btn orb ${tab==='video'?'active':''}`} onClick={() => setTab(tab === 'video' ? 'chat' : 'video')} style={{ padding:'7px 10px', fontSize:'10px' }}>🎥 VIDEO</button>
+            <button className={`tab-btn orb ${tab==='translator'?'active':''}`} onClick={() => setTab(tab === 'translator' ? 'chat' : 'translator')} style={{ padding:'7px 10px', fontSize:'10px' }}>🌐 VERTAAL</button>
+            <button className={`tab-btn orb ${tab==='history'?'active':''}`} onClick={() => { setTab(tab === 'history' ? 'chat' : 'history'); loadHistory(); }} style={{ padding:'7px 10px', fontSize:'10px' }}>📚 HISTORY</button>
           </div>
         </div>
       )}
@@ -857,6 +839,10 @@ const App: React.FC = () => {
           overflowY:'auto',
         }}>
           <div style={{ maxWidth:'800px', margin:'0 auto' }}>
+            {/* Sluiteknop bovenaan */}
+            <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:'8px' }}>
+              <button onClick={() => { setTranslatorOpen(false); setTab('chat'); }} className="orb" style={{ background:'none', border:'1px solid rgba(34,211,238,0.3)', borderRadius:'8px', color:'rgba(34,211,238,0.6)', padding:'4px 14px', cursor:'pointer', fontSize:'11px' }}>✕ SLUIT</button>
+            </div>
             <div style={{ display:'flex', gap:'12px', marginBottom:'12px', alignItems:'center' }}>
               <select value={myLang} onChange={e => setMyLang(e.target.value)} className="orb" style={{ background:'rgba(0,0,0,0.8)', border:'1px solid rgba(34,211,238,0.4)', borderRadius:'8px', color:'#22d3ee', padding:'6px 10px', fontSize:'11px', flex:1 }}>
                 {LANGS.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
@@ -893,7 +879,7 @@ const App: React.FC = () => {
                         const data = await res.json();
                         const translated = data.content?.split('\n\n[Recentheids')[0] || typed;
                         setTheirText(translated);
-                        speakInLang(translated, theirLang);
+                        // speakInLang(translated, theirLang);
                       } catch {}
                     }
                   }}
@@ -928,7 +914,7 @@ const App: React.FC = () => {
                         const data = await res.json();
                         const translated = data.content?.split('\n\n[Recentheids')[0] || typed;
                         setMyText(translated);
-                        speakInLang(translated, myLang);
+                        // auto-speak disabled
                       } catch {}
                     }
                   }}
@@ -939,11 +925,6 @@ const App: React.FC = () => {
               </div>
             </div>
             <button onClick={() => { setMyText(''); setTheirText(''); }} style={{ marginTop:'10px', background:'none', border:'none', color:'rgba(34,211,238,0.3)', cursor:'pointer', fontSize:'11px' }} className="orb">✕ wissen</button>
-            <button onClick={() => {
-              const rv = (window as any).responsiveVoice;
-              if (rv) { rv.speak('Merhaba, nasılsınız?', 'Turkish Female'); }
-              else { alert('ResponsiveVoice niet geladen — check console'); }
-            }} style={{ marginTop:'6px', marginLeft:'10px', background:'none', border:'1px solid rgba(34,211,238,0.2)', borderRadius:'8px', color:'rgba(34,211,238,0.4)', cursor:'pointer', fontSize:'10px', padding:'4px 8px' }} className="orb">🧪 test TR stem</button>
           </div>
         </div>
       )}
@@ -1010,12 +991,13 @@ const App: React.FC = () => {
                           <button
                             onClick={() => speak(m.content, i)}
                             title={speakingIndex === i ? 'Stop' : 'Voorlezen'}
-                            style={{ background:'none', border:'none', cursor:'pointer', fontSize:'15px', opacity: 0.6, transition:'opacity 0.2s' }}
+                            style={{ background:'none', border:'none', cursor:'pointer', padding:0, opacity: speakingIndex === i ? 1 : 0.7, transition:'opacity 0.2s, transform 0.2s', transform: speakingIndex === i ? 'scale(1.1)' : 'scale(1)', animation: speakingIndex === i ? 'speakerPulse 1.2s ease-in-out infinite' : 'none' }}
                             onMouseEnter={e => (e.currentTarget.style.opacity='1')}
-                            onMouseLeave={e => (e.currentTarget.style.opacity='0.6')}
+                            onMouseLeave={e => (e.currentTarget.style.opacity = speakingIndex === i ? '1' : '0.7')}
                           >
-                            {speakingIndex === i ? '⏹' : '🔊'}
+                            <img src="/sspeakerknop.png" style={{ width:'36px', height:'36px', objectFit:'contain', display:'block' }} />
                           </button>
+                          <style>{`@keyframes speakerPulse{0%,100%{filter:brightness(1) drop-shadow(0 0 4px rgba(34,211,238,0.4))}50%{filter:brightness(1.5) drop-shadow(0 0 14px rgba(34,211,238,0.95))}}`}</style>
                           {i === messages.length - 1 && (
                             <button
                               onClick={manualSave}
@@ -1065,7 +1047,7 @@ const App: React.FC = () => {
           )}
 
           {/* CHAT INPUT */}
-          <div style={{ padding:'12px 16px', paddingBottom:'calc(12px + env(safe-area-inset-bottom, 0px))', zIndex:200, borderTop:'1px solid rgba(34,211,238,0.1)', background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', flexShrink:0 }}>
+          <div style={{ padding:'12px 16px', paddingBottom:'calc(12px + env(safe-area-inset-bottom, 0px))', zIndex:200, borderTop:'1px solid rgba(34,211,238,0.1)', background:'rgba(0,0,0,0)', backdropFilter:'blur(0px)', flexShrink:0 }}>
             <div style={{ maxWidth:'760px', margin:'0 auto', display:'flex', alignItems:'flex-end', gap:'10px' }}>
               <input type="file" ref={fileRef} style={{ display:'none' }} onChange={handleFileChange} accept="image/*" />
               <input type="file" ref={cameraRef} style={{ display:'none' }} onChange={handleFileChange} accept="image/*" capture="environment" />
@@ -1113,12 +1095,14 @@ const App: React.FC = () => {
                 }}
                 style={{
                   width:'50px', height:'50px', flexShrink:0,
-                  background: isChatListening ? 'rgba(255,50,50,0.2)' : 'rgba(34,211,238,0.1)',
-                  border: `1px solid ${isChatListening ? 'rgba(255,50,50,0.6)' : 'rgba(34,211,238,0.5)'}`,
-                  borderRadius:'12px', color: isChatListening ? '#ff6666' : '#22d3ee',
-                  cursor:'pointer', fontSize:'20px', display:'flex', alignItems:'center', justifyContent:'center',
+                  background:'none', border:'none',
+                  borderRadius:'12px', cursor:'pointer', padding:0,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  animation: isChatListening ? 'speakerPulse 1s ease-in-out infinite' : 'none',
                 }}
-              >{isChatListening ? '⏹' : '🎤'}</button>
+              >
+                <img src="/sspeakerknop.png" style={{ width:'50px', height:'50px', objectFit:'contain', borderRadius:'10px', filter: isChatListening ? 'brightness(1.5) drop-shadow(0 0 10px rgba(255,80,80,0.9))' : 'brightness(0.9)' }} />
+              </button>
               <button onClick={handleSend} disabled={isPending} style={{ width:'50px', height:'50px', background:'rgba(34,211,238,0.1)', border:'1px solid rgba(34,211,238,0.5)', borderRadius:'12px', color:'#22d3ee', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                 <SendIcon />
               </button>
@@ -1131,7 +1115,10 @@ const App: React.FC = () => {
       {tab === 'image' && (
         <div style={{ flex:1, overflowY:'auto', padding:'24px 20px', zIndex:10 }}>
           <div style={{ maxWidth:'700px', margin:'0 auto' }}>
-            <h2 className="orb" style={{ color:'#22d3ee', fontSize:'14px', letterSpacing:'4px', marginBottom:'8px' }}>AFBEELDING GENEREREN</h2>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
+              <h2 className="orb" style={{ color:'#22d3ee', fontSize:'14px', letterSpacing:'4px' }}>AFBEELDING GENEREREN</h2>
+              <button onClick={() => { setTranslatorOpen(false); setTab('chat'); }} className="orb" style={{ background:'none', border:'1px solid rgba(34,211,238,0.3)', borderRadius:'8px', color:'rgba(34,211,238,0.6)', padding:'4px 14px', cursor:'pointer', fontSize:'11px' }}>✕ SLUIT</button>
+            </div>
             <p style={{ color:'rgba(255,255,255,0.4)', fontSize:'12px', marginBottom:'20px' }}>Typ je prompt in het Nederlands. Reti vertaalt naar Engels en opent de beste gratis image AI.</p>
             <div style={{ display:'flex', gap:'10px', marginBottom:'20px' }}>
               <textarea
@@ -1176,6 +1163,11 @@ const App: React.FC = () => {
       {tab === 'history' && (
         <div style={{ flex:1, overflowY:'auto', padding:'20px', zIndex:10 }}>
           <div style={{ maxWidth:'700px', margin:'0 auto' }}>
+            {!selectedEntry && (
+              <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:'12px' }}>
+                <button onClick={() => { setTranslatorOpen(false); setTab('chat'); }} className="orb" style={{ background:'none', border:'1px solid rgba(34,211,238,0.3)', borderRadius:'8px', color:'rgba(34,211,238,0.6)', padding:'4px 14px', cursor:'pointer', fontSize:'11px' }}>✕ SLUIT</button>
+              </div>
+            )}
             {selectedEntry ? (
               <div>
                 <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'16px' }}>
@@ -1223,9 +1215,21 @@ const App: React.FC = () => {
                   )}
                 </div>
 
-                <div style={{ display:'flex', gap:'8px', marginBottom:'16px' }}>
+                <div style={{ display:'flex', gap:'8px', marginBottom:'16px', flexWrap:'wrap' }}>
                   <button className={`tab-btn orb ${historyFilter==='all'?'active':''}`} onClick={() => setHistoryFilter('all')}>ALLES ({historyEntries.length})</button>
                   <button className={`tab-btn orb ${historyFilter==='important'?'active':''}`} onClick={() => setHistoryFilter('important')}>⭐ BELANGRIJK ({historyEntries.filter(e=>e.important).length})</button>
+                  <button className={`tab-btn orb ${bulkMode?'active':''}`} onClick={() => { setBulkMode(v => !v); setSelectedIds(new Set()); }}>☑ SELECTEER</button>
+                  {bulkMode && selectedIds.size > 0 && (
+                    <button className="tab-btn orb" onClick={async () => {
+                      if (!confirm(`${selectedIds.size} gesprekken wissen?`)) return;
+                      for (const id of selectedIds) {
+                        await fetch(`/api/history/${id}`, { method: 'DELETE' });
+                      }
+                      setSelectedIds(new Set());
+                      setBulkMode(false);
+                      loadHistory();
+                    }} style={{ borderColor:'rgba(255,100,100,0.5)', color:'rgba(255,100,100,0.8)' }}>🗑 WIS {selectedIds.size}</button>
+                  )}
                 </div>
                 {historyEntries.filter(e => historyFilter === 'all' || e.important).length === 0 ? (
                   <div style={{ textAlign:'center', padding:'40px', color:'rgba(255,255,255,0.3)', fontSize:'13px' }}>
@@ -1235,14 +1239,28 @@ const App: React.FC = () => {
                 ) : (
                   <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
                     {historyEntries.filter(e => historyFilter === 'all' || e.important).map(entry => (
-                      <div key={entry.id} className="provider-card" style={{ display:'flex', alignItems:'center', gap:'12px' }} onClick={() => setSelectedEntry(entry)}>
-                        <span style={{ fontSize:'20px', flexShrink:0 }}>{entry.important ? '⭐' : '🥈'}</span>
+                      <div key={entry.id} className="provider-card" style={{ display:'flex', alignItems:'center', gap:'12px', border: selectedIds.has(entry.id) ? '1px solid rgba(255,100,100,0.6)' : undefined }}
+                        onClick={() => {
+                          if (bulkMode) {
+                            setSelectedIds(prev => {
+                              const next = new Set(prev);
+                              next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
+                              return next;
+                            });
+                          } else {
+                            setSelectedEntry(entry);
+                          }
+                        }}>
+                        {bulkMode
+                          ? <span style={{ fontSize:'20px', flexShrink:0 }}>{selectedIds.has(entry.id) ? '☑' : '☐'}</span>
+                          : <span style={{ fontSize:'20px', flexShrink:0 }}>{entry.important ? '⭐' : '🥈'}</span>
+                        }
                         <div style={{ flex:1, minWidth:0 }}>
                           <div className="orb" style={{ color:'#22d3ee', fontSize:'12px', marginBottom:'3px' }}>{entry.title}</div>
                           <div style={{ color:'rgba(255,255,255,0.5)', fontSize:'11px', marginBottom:'3px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{entry.summary}</div>
                           <div style={{ color:'rgba(34,211,238,0.4)', fontSize:'10px' }} className="orb">{new Date(entry.date).toLocaleDateString('nl-NL')}</div>
                         </div>
-                        <span style={{ color:'rgba(34,211,238,0.3)', fontSize:'16px' }}>›</span>
+                        {!bulkMode && <span style={{ color:'rgba(34,211,238,0.3)', fontSize:'16px' }}>›</span>}
                       </div>
                     ))}
                   </div>
@@ -1257,7 +1275,10 @@ const App: React.FC = () => {
       {tab === 'video' && (
         <div style={{ flex:1, overflowY:'auto', padding:'24px 20px', zIndex:10 }}>
           <div style={{ maxWidth:'700px', margin:'0 auto' }}>
-            <h2 className="orb" style={{ color:'#22d3ee', fontSize:'14px', letterSpacing:'4px', marginBottom:'8px' }}>VIDEO GENEREREN</h2>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
+              <h2 className="orb" style={{ color:'#22d3ee', fontSize:'14px', letterSpacing:'4px' }}>VIDEO GENEREREN</h2>
+              <button onClick={() => { setTranslatorOpen(false); setTab('chat'); }} className="orb" style={{ background:'none', border:'1px solid rgba(34,211,238,0.3)', borderRadius:'8px', color:'rgba(34,211,238,0.6)', padding:'4px 14px', cursor:'pointer', fontSize:'11px' }}>✕ SLUIT</button>
+            </div>
             <p style={{ color:'rgba(255,255,255,0.4)', fontSize:'12px', marginBottom:'20px' }}>Typ je prompt, kies een provider. De app vertaalt naar Engels en opent de site.</p>
             <textarea
               value={videoPrompt}
