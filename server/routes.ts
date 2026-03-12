@@ -85,6 +85,33 @@ function pickMostRecentDate(dates: string[]): string | null {
 }
 
 // ============================================================
+// RETRY HELPER — vangt fetch failed / ECONNREFUSED op bij koude start
+// ============================================================
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  delayMs = 2000
+): Promise<T> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const isFetchError =
+        err?.message?.includes("fetch failed") ||
+        err?.cause?.code === "ECONNREFUSED" ||
+        err?.cause?.code === "ETIMEDOUT";
+      if (isFetchError && attempt < retries) {
+        console.log(`Poging ${attempt}/${retries} mislukt (${err?.cause?.code ?? "fetch failed"}), wacht ${delayMs}ms...`);
+        await new Promise((res) => setTimeout(res, delayMs));
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw new Error("Alle pogingen mislukt");
+}
+
+// ============================================================
 // GEHEUGEN: bouw context string voor systeem prompt
 // ============================================================
 function buildMemoryContext(memory: RetiMemory): string {
@@ -138,7 +165,6 @@ Extraheer ALLEEN wat duidelijk in het gesprek staat. Geen aannames.`;
     if (parsed.location) currentMemory.location = parsed.location;
     if (parsed.language) currentMemory.language = parsed.language;
 
-    // Voeg nieuwe interesses toe zonder duplicaten
     if (parsed.new_interests?.length) {
       for (const i of parsed.new_interests) {
         if (!currentMemory.interests.includes(i)) currentMemory.interests.push(i);
@@ -175,24 +201,28 @@ const gemini = new GoogleGenAI({
 });
 
 async function callGemini(prompt: string): Promise<string> {
-  const resp = await gemini.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-  });
+  const resp = await withRetry(() =>
+    gemini.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+    })
+  );
   return resp.text || "";
 }
 
 async function callGeminiVision(prompt: string, base64Image: string, mimeType: string): Promise<string> {
-  const resp = await gemini.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: [{
-      role: "user",
-      parts: [
-        { inlineData: { mimeType, data: base64Image } },
-        { text: prompt }
-      ]
-    }],
-  });
+  const resp = await withRetry(() =>
+    gemini.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{
+        role: "user",
+        parts: [
+          { inlineData: { mimeType, data: base64Image } },
+          { text: prompt }
+        ]
+      }],
+    })
+  );
   return resp.text || "";
 }
 
@@ -203,18 +233,20 @@ async function callGroq(messages: Array<{role: string, content: string}>): Promi
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY niet geconfigureerd in Secrets");
 
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages,
-      max_tokens: 1024,
-    }),
-  });
+  const response = await withRetry(() =>
+    fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages,
+        max_tokens: 1024,
+      }),
+    })
+  );
 
   const data = await response.json() as any;
   if (!response.ok) throw new Error(data.error?.message || "Groq API fout");
@@ -300,11 +332,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "Bericht mag niet leeg zijn" });
       }
 
-      // Laad geheugen
       const memory = loadMemory();
       const memoryContext = buildMemoryContext(memory);
 
-      // Web search
       let searchContext = "";
       if (needsWebSearch(message)) {
         console.log("Web search voor:", message);
@@ -312,7 +342,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (searchContext) console.log("Search resultaat gevonden");
       }
 
-      // Weer API
       const weatherKeywords = /weer|temperature|temperatuur|regen|zon|wind|bewolkt|graden|forecast|weersvoorspelling|morgen.*weer|weer.*morgen|hoe laat.*zon|zonsondergang|zonsopgang|urla|seferihisar|izmir|istanbul|ankara|buiten|paraplu|jas|warm|koud|hot|cold/i;
       let weatherContext = "";
       if (weatherKeywords.test(message)) {
@@ -367,7 +396,6 @@ Gebruiker: ${message}`;
       const result = await answerWithFailover(messages, plainPrompt);
       const cleanContent = result.content.replace(/\n*\[Recentheids-check\][^\n]*/g, '').trim();
 
-      // Update geheugen op de achtergrond (niet-blokkerend)
       const fullHistory = [...(history || []), { role: "user", content: message }, { role: "assistant", content: cleanContent }];
       updateMemoryFromConversation(fullHistory, memory).catch(() => {});
 
