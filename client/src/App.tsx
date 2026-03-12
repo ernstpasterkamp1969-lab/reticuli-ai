@@ -945,7 +945,7 @@ const App: React.FC = () => {
             background:'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 50%, transparent 100%)',
             pointerEvents:'none', zIndex:15,
           }} />
-          <div style={{ flex:1, overflowY:'auto', padding:'16px 20px', zIndex:10, position:'relative' }}>
+          <div style={{ flex:1, overflowY:'auto', padding:'16px 20px 120px 20px', zIndex:10, position:'relative' }}>
             <div style={{ maxWidth:'800px', margin:'0 auto' }}>
               {messages.length === 0 && (
                 <div style={{ textAlign:'center', padding:'60px 20px' }}>
