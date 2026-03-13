@@ -85,7 +85,7 @@ function pickMostRecentDate(dates: string[]): string | null {
 }
 
 // ============================================================
-// RETRY HELPER — vangt fetch failed / ECONNREFUSED op bij koude start
+// RETRY HELPER
 // ============================================================
 async function withRetry<T>(
   fn: () => Promise<T>,
@@ -190,20 +190,16 @@ Extraheer ALLEEN wat duidelijk in het gesprek staat. Geen aannames.`;
 }
 
 // ============================================================
-// GEMINI
+// GEMINI — zonder baseUrl, SDK gebruikt standaard Google endpoint
 // ============================================================
 const gemini = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
-  httpOptions: {
-    apiVersion: "",
-    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
-  },
+  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY,
 });
 
 async function callGemini(prompt: string): Promise<string> {
   const resp = await withRetry(() =>
     gemini.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.0-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     })
   );
@@ -213,7 +209,7 @@ async function callGemini(prompt: string): Promise<string> {
 async function callGeminiVision(prompt: string, base64Image: string, mimeType: string): Promise<string> {
   const resp = await withRetry(() =>
     gemini.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.0-flash",
       contents: [{
         role: "user",
         parts: [
