@@ -740,11 +740,22 @@ const App: React.FC = () => {
     <div style={{
       backgroundColor:'#000', color:'white', height:'100dvh', width:'100vw',
       display:'flex', flexDirection:'column', position:'fixed', inset:0, overflow:'hidden',
-      backgroundImage:"url('/aangepast-bg.png')",
-      backgroundSize:'100% auto',
-      backgroundPosition:'bottom center',
-      backgroundRepeat:'no-repeat'
     }}>
+      {/* ACHTERGROND AFBEELDING — vast onderaan */}
+      <img
+        src="/aangepast-bg.png"
+        style={{
+          position:'fixed',
+          bottom: '70px',
+          left:'50%',
+          transform:'translateX(-50%)',
+          width:'100%',
+          maxWidth:'500px',
+          zIndex:2,
+          pointerEvents:'none',
+          opacity:1,
+        }}
+      />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
         @font-face { font-family: 'SpaceAge'; src: url('/space age.ttf') format('truetype'); }
