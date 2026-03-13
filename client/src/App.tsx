@@ -741,8 +741,8 @@ const App: React.FC = () => {
       backgroundColor:'#000', color:'white', height:'100dvh', width:'100vw',
       display:'flex', flexDirection:'column', position:'fixed', inset:0, overflow:'hidden',
       backgroundImage:"url('/aangepast-bg.png')",
-      backgroundSize:'contain',
-      backgroundPosition:'bottom center', // ← GEWIJZIGD van 'center' naar 'bottom center'
+      backgroundSize:'100% auto',
+      backgroundPosition:'bottom center',
       backgroundRepeat:'no-repeat'
     }}>
       <style>{`
