@@ -751,7 +751,7 @@ const App: React.FC = () => {
           transform:'translateX(-50%)',
           width:'100%',
           maxWidth:'500px',
-          zIndex:2,
+          zIndex:0,
           pointerEvents:'none',
           opacity:1,
         }}
