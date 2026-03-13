@@ -14,26 +14,18 @@ if (typeof window !== 'undefined' && !(window as any).responsiveVoice) {
 // ============================================================
 const MarkdownText: React.FC<{ text: string; color: string }> = ({ text, color }) => {
   const renderLine = (line: string, key: number) => {
-    // Lege regel
     if (!line.trim()) return <div key={key} style={{ height: '8px' }} />;
-
-    // Koptekst ## of ###
     const h2 = line.match(/^##\s+(.+)/);
     const h3 = line.match(/^###\s+(.+)/);
     if (h2) return <div key={key} style={{ fontWeight: 'bold', fontSize: '15px', color, marginTop: '10px', marginBottom: '4px' }}>{renderInline(h2[1])}</div>;
     if (h3) return <div key={key} style={{ fontWeight: 'bold', fontSize: '13px', color, marginTop: '8px', marginBottom: '2px' }}>{renderInline(h3[1])}</div>;
-
-    // Lijst item - of *
     const li = line.match(/^[\-\*]\s+(.+)/);
     const oli = line.match(/^\d+\.\s+(.+)/);
     if (li) return <div key={key} style={{ display: 'flex', gap: '8px', marginBottom: '2px' }}><span style={{ color, opacity: 0.6, flexShrink: 0 }}>▸</span><span>{renderInline(li[1])}</span></div>;
     if (oli) return <div key={key} style={{ display: 'flex', gap: '8px', marginBottom: '2px' }}><span style={{ color, opacity: 0.6, flexShrink: 0 }}>{oli[0].split('.')[0]}.</span><span>{renderInline(oli[1])}</span></div>;
-
-    // Code block
     if (line.startsWith('```') || line.startsWith('    ')) {
       return <div key={key} style={{ fontFamily: 'monospace', fontSize: '12px', background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '6px', padding: '4px 8px', margin: '4px 0', color: '#22d3ee' }}>{line.replace(/^```\w*|```$/g, '').replace(/^    /, '')}</div>;
     }
-
     return <div key={key} style={{ marginBottom: '2px' }}>{renderInline(line)}</div>;
   };
 
@@ -42,20 +34,14 @@ const MarkdownText: React.FC<{ text: string; color: string }> = ({ text, color }
     let remaining = text;
     let i = 0;
     while (remaining.length > 0) {
-      // **vet**
       const bold = remaining.match(/^([\s\S]*?)\*\*(.+?)\*\*([\s\S]*)/);
-      // *cursief*
       const italic = remaining.match(/^([\s\S]*?)\*(.+?)\*([\s\S]*)/);
-      // `code`
       const code = remaining.match(/^([\s\S]*?)`(.+?)`([\s\S]*)/);
-
       const firstBold = bold ? (bold[1]?.length ?? 0) : Infinity;
       const firstItalic = italic ? (italic[1]?.length ?? 0) : Infinity;
       const firstCode = code ? (code[1]?.length ?? 0) : Infinity;
       const first = Math.min(firstBold, firstItalic, firstCode);
-
       if (first === Infinity) { parts.push(<span key={i++}>{remaining}</span>); break; }
-
       if (first === firstBold && bold) {
         if (bold[1]) parts.push(<span key={i++}>{bold[1]}</span>);
         parts.push(<strong key={i++} style={{ color, fontWeight: 'bold' }}>{bold[2]}</strong>);
@@ -143,7 +129,6 @@ const BootAnimation: React.FC<{ onComplete: () => void }> = ({ onComplete }) => 
 const HologramReti: React.FC<{ isSpeaking: boolean; visible: boolean; menuOpen: boolean }> = ({ isSpeaking: _isSpeaking, visible, menuOpen }) => {
   const [glitch, setGlitch] = useState(false);
 
-  // Occasionele glitch
   useEffect(() => {
     const glitchInterval = setInterval(() => {
       if (Math.random() > 0.85) {
@@ -165,7 +150,6 @@ const HologramReti: React.FC<{ isSpeaking: boolean; visible: boolean; menuOpen: 
       transition: glitch ? 'none' : 'filter 0.3s, opacity 0.8s ease',
       opacity: shouldShow ? 1 : 0,
     }}>
-      {/* PNG zonder achtergrond */}
       <img
         src="/grey-reti .png"
         onLoad={() => console.log('✅ grey-reti .png geladen!')}
@@ -176,13 +160,11 @@ const HologramReti: React.FC<{ isSpeaking: boolean; visible: boolean; menuOpen: 
           filter: 'brightness(1.1) saturate(0.2) hue-rotate(160deg)',
         }}
       />
-      {/* Scanlijnen overlay */}
       <div style={{
         position: 'absolute', inset: 0,
         backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 4px)',
         pointerEvents: 'none',
       }} />
-      {/* Cyan gloed rand */}
       <div style={{
         position: 'absolute', inset: 0,
         boxShadow: 'inset 0 0 20px rgba(34,211,238,0.15)',
@@ -323,7 +305,6 @@ const App: React.FC = () => {
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Inactiviteit timer voor systeemmelding
   useEffect(() => {
     const reset = () => {
       clearTimeout(inactivityTimerRef.current);
@@ -346,16 +327,15 @@ const App: React.FC = () => {
       window.removeEventListener('touchstart', reset);
     };
   }, []);
+
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Scroll naar beneden bij nieuwe berichten
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isPending]);
 
-  // Laad video providers
   useEffect(() => {
     fetch('/api/video-providers').then(r => r.json()).then(setVideoProviders).catch(() => {});
   }, []);
@@ -402,7 +382,7 @@ const App: React.FC = () => {
     setShowCamera(false);
   };
 
-  // ---- SPRAAK (Text-to-Speech) ----
+  // ---- SPRAAK ----
   const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
 
   const detectLang = (text: string): string => {
@@ -432,7 +412,6 @@ const App: React.FC = () => {
     const trySpeak = () => {
       const voices = window.speechSynthesis.getVoices();
       const langCode = lang.slice(0, 2).toLowerCase();
-      // Voor Nederlands: altijd nl-NL verkiezen boven nl-BE (Vlaams)
       let chosen;
       if (langCode === 'nl') {
         chosen = voices.find(v => v.lang.toLowerCase() === 'nl-nl' && v.name.toLowerCase().includes('male'))
@@ -475,7 +454,6 @@ const App: React.FC = () => {
     else { window.speechSynthesis.onvoiceschanged = trySpeak; }
   };
 
-  // ---- STEM BESCHIKBAARHEID ----
   const [availableVoiceLangs, setAvailableVoiceLangs] = useState<string[]>([]);
   useEffect(() => {
     const updateVoices = () => {
@@ -502,7 +480,6 @@ const App: React.FC = () => {
     setTimeout(() => {
       const voices = window.speechSynthesis.getVoices();
       const chosen = voices.find(v => v.lang.toLowerCase().startsWith(langCode));
-      console.log(`Stem voor ${langCode}:`, chosen?.name, chosen?.lang, '| Alle stemmen:', voices.map(v=>v.lang).join(' '));
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = lang;
       utter.rate = 0.88;
@@ -735,7 +712,6 @@ const App: React.FC = () => {
 
   useEffect(() => { loadHistory(); }, []);
 
-  // ---- VIDEO PROMPT VERTALEN EN OPENEN ----
   const handleOpenVideo = async (providerUrl: string) => {
     if (!videoPrompt.trim()) { alert('Beschrijf eerst je video!'); return; }
     setIsPending(true);
@@ -761,7 +737,14 @@ const App: React.FC = () => {
   // RENDER
   // ============================================================
   return (
-    <div style={{ backgroundColor:'#000', color:'white', height:'100dvh', width:'100vw', display:'flex', flexDirection:'column', position:'fixed', inset:0, overflow:'hidden', backgroundImage:"url('/aangepast-bg.png')", backgroundSize:'contain', backgroundPosition:'center', backgroundRepeat:'no-repeat' }}>
+    <div style={{
+      backgroundColor:'#000', color:'white', height:'100dvh', width:'100vw',
+      display:'flex', flexDirection:'column', position:'fixed', inset:0, overflow:'hidden',
+      backgroundImage:"url('/aangepast-bg.png')",
+      backgroundSize:'contain',
+      backgroundPosition:'bottom center', // ← GEWIJZIGD van 'center' naar 'bottom center'
+      backgroundRepeat:'no-repeat'
+    }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
         @font-face { font-family: 'SpaceAge'; src: url('/space age.ttf') format('truetype'); }
@@ -830,7 +813,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* VERTALER — fixed overlay, valt over knoppen heen, groeit omhoog */}
+      {/* VERTALER */}
       {translatorOpen && tab === 'translator' && (
         <div style={{
           position:'fixed', top:'120px', left:0, right:0, bottom:0,
@@ -839,7 +822,6 @@ const App: React.FC = () => {
           overflowY:'auto',
         }}>
           <div style={{ maxWidth:'800px', margin:'0 auto' }}>
-            {/* Sluiteknop bovenaan */}
             <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:'8px' }}>
               <button onClick={() => { setTranslatorOpen(false); setTab('chat'); }} className="orb" style={{ background:'none', border:'1px solid rgba(34,211,238,0.3)', borderRadius:'8px', color:'rgba(34,211,238,0.6)', padding:'4px 14px', cursor:'pointer', fontSize:'11px' }}>✕ SLUIT</button>
             </div>
@@ -853,7 +835,6 @@ const App: React.FC = () => {
               </select>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', height:'calc(100vh - 220px)' }}>
-              {/* IK SPREEK */}
               <div style={{ border:'1px solid rgba(34,211,238,0.3)', borderRadius:'12px', padding:'12px', background:'rgba(0,0,0,0.6)', display:'flex', flexDirection:'column', gap:'8px', overflow:'hidden' }}>
                 <div className="orb" style={{ fontSize:'9px', color:'rgba(34,211,238,0.5)', letterSpacing:'2px', flexShrink:0 }}>IK SPREEK</div>
                 <div style={{ flex:1, overflowY:'auto', color:'white', fontSize:'13px', lineHeight:'1.6', wordBreak:'break-word' }}>
@@ -862,10 +843,7 @@ const App: React.FC = () => {
                 {myText && (
                   <button onClick={() => speakInLang(myText, myLang)} style={{ background:'none', border:'none', cursor:'pointer', fontSize:'14px', opacity:0.7, textAlign:'left', flexShrink:0 }}>🔊</button>
                 )}
-                <textarea
-                  placeholder="Of typ hier..."
-                  className="orb"
-                  rows={2}
+                <textarea placeholder="Of typ hier..." className="orb" rows={2}
                   style={{ width:'100%', background:'rgba(0,0,0,0.5)', border:'1px solid rgba(34,211,238,0.2)', borderRadius:'8px', padding:'8px', color:'white', fontSize:'12px', outline:'none', resize:'none', boxSizing:'border-box', flexShrink:0 }}
                   onKeyDown={async (e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -879,16 +857,15 @@ const App: React.FC = () => {
                         const data = await res.json();
                         const translated = data.content?.split('\n\n[Recentheids')[0] || typed;
                         setTheirText(translated);
-                        // speakInLang(translated, theirLang);
                       } catch {}
                     }
                   }}
                 />
-                <button onClick={() => startListening(true)} disabled={isListeningMine || isListeningTheirs} style={{ width:'100%', padding:'10px', background: isListeningMine ? 'rgba(255,50,50,0.2)' : 'rgba(34,211,238,0.1)', border:`1px solid ${isListeningMine ? 'rgba(255,50,50,0.6)' : 'rgba(34,211,238,0.4)'}`, borderRadius:'8px', color: isListeningMine ? '#ff6666' : '#22d3ee', cursor:'pointer', fontSize:'11px', flexShrink:0 }} className="orb">
+                <button onClick={() => startListening(true)} disabled={isListeningMine || isListeningTheirs}
+                  style={{ width:'100%', padding:'10px', background: isListeningMine ? 'rgba(255,50,50,0.2)' : 'rgba(34,211,238,0.1)', border:`1px solid ${isListeningMine ? 'rgba(255,50,50,0.6)' : 'rgba(34,211,238,0.4)'}`, borderRadius:'8px', color: isListeningMine ? '#ff6666' : '#22d3ee', cursor:'pointer', fontSize:'11px', flexShrink:0 }} className="orb">
                   {isListeningMine ? '🔴 LUISTERT...' : '🎤 SPREEK'}
                 </button>
               </div>
-              {/* ZIJ SPREKEN */}
               <div style={{ border:'1px solid rgba(34,211,238,0.3)', borderRadius:'12px', padding:'12px', background:'rgba(0,0,0,0.6)', display:'flex', flexDirection:'column', gap:'8px', overflow:'hidden' }}>
                 <div className="orb" style={{ fontSize:'9px', color:'rgba(34,211,238,0.5)', letterSpacing:'2px', flexShrink:0 }}>ZIJ SPREKEN</div>
                 <div style={{ flex:1, overflowY:'auto', color:'#22d3ee', fontSize:'13px', lineHeight:'1.6', wordBreak:'break-word' }}>
@@ -897,10 +874,7 @@ const App: React.FC = () => {
                 {theirText && (
                   <button onClick={() => speakInLang(theirText, theirLang)} style={{ background:'none', border:'none', cursor:'pointer', fontSize:'14px', opacity:0.7, textAlign:'left', flexShrink:0 }}>🔊</button>
                 )}
-                <textarea
-                  placeholder="Of typ hier..."
-                  className="orb"
-                  rows={2}
+                <textarea placeholder="Of typ hier..." className="orb" rows={2}
                   style={{ width:'100%', background:'rgba(0,0,0,0.5)', border:'1px solid rgba(34,211,238,0.2)', borderRadius:'8px', padding:'8px', color:'white', fontSize:'12px', outline:'none', resize:'none', boxSizing:'border-box', flexShrink:0 }}
                   onKeyDown={async (e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -914,12 +888,12 @@ const App: React.FC = () => {
                         const data = await res.json();
                         const translated = data.content?.split('\n\n[Recentheids')[0] || typed;
                         setMyText(translated);
-                        // auto-speak disabled
                       } catch {}
                     }
                   }}
                 />
-                <button onClick={() => startListening(false)} disabled={isListeningMine || isListeningTheirs} style={{ width:'100%', padding:'10px', background: isListeningTheirs ? 'rgba(255,50,50,0.2)' : 'rgba(34,211,238,0.1)', border:`1px solid ${isListeningTheirs ? 'rgba(255,50,50,0.6)' : 'rgba(34,211,238,0.4)'}`, borderRadius:'8px', color: isListeningTheirs ? '#ff6666' : '#22d3ee', cursor:'pointer', fontSize:'11px', flexShrink:0 }} className="orb">
+                <button onClick={() => startListening(false)} disabled={isListeningMine || isListeningTheirs}
+                  style={{ width:'100%', padding:'10px', background: isListeningTheirs ? 'rgba(255,50,50,0.2)' : 'rgba(34,211,238,0.1)', border:`1px solid ${isListeningTheirs ? 'rgba(255,50,50,0.6)' : 'rgba(34,211,238,0.4)'}`, borderRadius:'8px', color: isListeningTheirs ? '#ff6666' : '#22d3ee', cursor:'pointer', fontSize:'11px', flexShrink:0 }} className="orb">
                   {isListeningTheirs ? '🔴 LUISTERT...' : '🎤 SPREEK'}
                 </button>
               </div>
@@ -939,7 +913,6 @@ const App: React.FC = () => {
       {/* ===== CHAT TAB ===== */}
       {tab === 'chat' && (
         <>
-          {/* Fade masker — fixed, bovenop de scrollbare chat */}
           <div style={{
             position:'fixed', top:'70px', left:0, right:0, height:'100px',
             background:'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 50%, transparent 100%)',
@@ -988,9 +961,7 @@ const App: React.FC = () => {
                       </div>
                       {m.role === 'assistant' && (
                         <div style={{ display:'flex', gap:'8px', marginTop:'4px', alignItems:'center' }}>
-                          <button
-                            onClick={() => speak(m.content, i)}
-                            title={speakingIndex === i ? 'Stop' : 'Voorlezen'}
+                          <button onClick={() => speak(m.content, i)} title={speakingIndex === i ? 'Stop' : 'Voorlezen'}
                             style={{ background:'none', border:'none', cursor:'pointer', padding:0, opacity: speakingIndex === i ? 1 : 0.7, transition:'opacity 0.2s, transform 0.2s', transform: speakingIndex === i ? 'scale(1.1)' : 'scale(1)', animation: speakingIndex === i ? 'speakerPulse 1.2s ease-in-out infinite' : 'none' }}
                             onMouseEnter={e => (e.currentTarget.style.opacity='1')}
                             onMouseLeave={e => (e.currentTarget.style.opacity = speakingIndex === i ? '1' : '0.7')}
@@ -999,11 +970,8 @@ const App: React.FC = () => {
                           </button>
                           <style>{`@keyframes speakerPulse{0%,100%{filter:brightness(1) drop-shadow(0 0 4px rgba(34,211,238,0.4))}50%{filter:brightness(1.5) drop-shadow(0 0 14px rgba(34,211,238,0.95))}}`}</style>
                           {i === messages.length - 1 && (
-                            <button
-                              onClick={manualSave}
-                              title="Gesprek opslaan"
-                              style={{ background:'none', border:'none', cursor:'pointer', fontSize:'15px', opacity: savedEntryId ? 1 : 0.4 }}
-                            >
+                            <button onClick={manualSave} title="Gesprek opslaan"
+                              style={{ background:'none', border:'none', cursor:'pointer', fontSize:'15px', opacity: savedEntryId ? 1 : 0.4 }}>
                               {savedEntryId ? '⭐' : '☆'}
                             </button>
                           )}
@@ -1052,10 +1020,8 @@ const App: React.FC = () => {
               <input type="file" ref={fileRef} style={{ display:'none' }} onChange={handleFileChange} accept="image/*" />
               <input type="file" ref={cameraRef} style={{ display:'none' }} onChange={handleFileChange} accept="image/*" capture="environment" />
               <div style={{ position:'relative', flexShrink:0 }}>
-                <button
-                  onClick={() => setShowPhotoMenu(v => !v)}
-                  style={{ width:'50px', height:'50px', background:'rgba(0,0,0,0.6)', border:'1px solid rgba(34,211,238,0.4)', borderRadius:'12px', cursor:'pointer', padding:'0', overflow:'hidden' }}
-                >
+                <button onClick={() => setShowPhotoMenu(v => !v)}
+                  style={{ width:'50px', height:'50px', background:'rgba(0,0,0,0.6)', border:'1px solid rgba(34,211,238,0.4)', borderRadius:'12px', cursor:'pointer', padding:'0', overflow:'hidden' }}>
                   <img src="/foto-icoon.png" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                 </button>
                 {showPhotoMenu && (
@@ -1065,18 +1031,12 @@ const App: React.FC = () => {
                   </div>
                 )}
               </div>
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
+              <textarea value={input} onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder=""
-                className="orb"
-                rows={1}
+                placeholder="" className="orb" rows={1}
                 style={{ flex:1, background:'rgba(0,0,0,0.7)', border:'1px solid rgba(34,211,238,0.4)', borderRadius:'12px', padding:'14px 16px', color:'white', outline:'none', resize:'none', fontSize:'14px', maxHeight:'120px', fontFamily:'OpenDyslexic, sans-serif' }}
               />
-              {/* Microfoon knop */}
-              <button
-                onClick={() => {
+              <button onClick={() => {
                   const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
                   if (!SR) { alert('Spraakherkenning niet beschikbaar. Gebruik Chrome!'); return; }
                   if (isChatListening) { chatRecogRef.current?.stop(); setIsChatListening(false); return; }
@@ -1093,17 +1053,11 @@ const App: React.FC = () => {
                   rec.onerror = () => setIsChatListening(false);
                   rec.start();
                 }}
-                style={{
-                  width:'50px', height:'50px', flexShrink:0,
-                  background:'none', border:'none',
-                  borderRadius:'12px', cursor:'pointer', padding:0,
-                  display:'flex', alignItems:'center', justifyContent:'center',
-                  animation: isChatListening ? 'speakerPulse 1s ease-in-out infinite' : 'none',
-                }}
-              >
+                style={{ width:'50px', height:'50px', flexShrink:0, background:'none', border:'none', borderRadius:'12px', cursor:'pointer', padding:0, display:'flex', alignItems:'center', justifyContent:'center', animation: isChatListening ? 'speakerPulse 1s ease-in-out infinite' : 'none' }}>
                 <img src="/sspeakerknop.png" style={{ width:'50px', height:'50px', objectFit:'contain', borderRadius:'10px', filter: isChatListening ? 'brightness(1.5) drop-shadow(0 0 10px rgba(255,80,80,0.9))' : 'brightness(0.9)' }} />
               </button>
-              <button onClick={handleSend} disabled={isPending} style={{ width:'50px', height:'50px', background:'rgba(34,211,238,0.1)', border:'1px solid rgba(34,211,238,0.5)', borderRadius:'12px', color:'#22d3ee', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <button onClick={handleSend} disabled={isPending}
+                style={{ width:'50px', height:'50px', background:'rgba(34,211,238,0.1)', border:'1px solid rgba(34,211,238,0.5)', borderRadius:'12px', color:'#22d3ee', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                 <SendIcon />
               </button>
             </div>
@@ -1121,26 +1075,21 @@ const App: React.FC = () => {
             </div>
             <p style={{ color:'rgba(255,255,255,0.4)', fontSize:'12px', marginBottom:'20px' }}>Typ je prompt in het Nederlands. Reti vertaalt naar Engels en opent de beste gratis image AI.</p>
             <div style={{ display:'flex', gap:'10px', marginBottom:'20px' }}>
-              <textarea
-                value={imagePrompt}
-                onChange={(e) => setImagePrompt(e.target.value)}
-                placeholder="Beschrijf je afbeelding in het Nederlands..."
-                className="orb"
-                rows={3}
+              <textarea value={imagePrompt} onChange={(e) => setImagePrompt(e.target.value)}
+                placeholder="Beschrijf je afbeelding in het Nederlands..." className="orb" rows={3}
                 style={{ flex:1, background:'rgba(0,0,0,0.7)', border:'1px solid rgba(34,211,238,0.4)', borderRadius:'12px', padding:'14px 16px', color:'white', outline:'none', resize:'none', fontSize:'13px' }}
               />
-              <button onClick={handleGenerateImage} disabled={isPending || !imagePrompt.trim()} style={{ padding:'14px 20px', background:'rgba(34,211,238,0.1)', border:'1px solid rgba(34,211,238,0.5)', borderRadius:'12px', color:'#22d3ee', cursor:'pointer', fontSize:'12px', fontWeight:'bold' }} className="orb">
+              <button onClick={handleGenerateImage} disabled={isPending || !imagePrompt.trim()}
+                style={{ padding:'14px 20px', background:'rgba(34,211,238,0.1)', border:'1px solid rgba(34,211,238,0.5)', borderRadius:'12px', color:'#22d3ee', cursor:'pointer', fontSize:'12px', fontWeight:'bold' }} className="orb">
                 {isPending ? 'LADEN...' : 'VERTAAL'}
               </button>
             </div>
-
             {generatedImage && (
               <div style={{ marginBottom:'20px', padding:'16px', border:'1px solid rgba(34,211,238,0.3)', borderRadius:'12px', background:'rgba(0,0,0,0.4)' }}>
                 <p className="orb" style={{ color:'rgba(34,211,238,0.6)', fontSize:'10px', marginBottom:'8px' }}>VERTAALDE PROMPT (gekopieerd naar klembord):</p>
                 <p style={{ color:'white', fontSize:'13px', lineHeight:'1.6' }}>{generatedImage}</p>
               </div>
             )}
-
             {imageProviders.length > 0 && (
               <>
                 <p className="orb" style={{ color:'rgba(34,211,238,0.5)', fontSize:'10px', letterSpacing:'2px', marginBottom:'12px' }}>KIES EEN GRATIS PROVIDER:</p>
@@ -1188,7 +1137,6 @@ const App: React.FC = () => {
               </div>
             ) : (
               <>
-                {/* GEHEUGEN SECTIE */}
                 <div style={{ marginBottom:'20px', padding:'14px', border:'1px solid rgba(34,211,238,0.25)', borderRadius:'12px', background:'rgba(34,211,238,0.03)' }}>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
                     <div className="orb" style={{ color:'#22d3ee', fontSize:'10px', letterSpacing:'3px' }}>🧠 RETI GEHEUGEN</div>
@@ -1214,7 +1162,6 @@ const App: React.FC = () => {
                     </div>
                   )}
                 </div>
-
                 <div style={{ display:'flex', gap:'8px', marginBottom:'16px', flexWrap:'wrap' }}>
                   <button className={`tab-btn orb ${historyFilter==='all'?'active':''}`} onClick={() => setHistoryFilter('all')}>ALLES ({historyEntries.length})</button>
                   <button className={`tab-btn orb ${historyFilter==='important'?'active':''}`} onClick={() => setHistoryFilter('important')}>⭐ BELANGRIJK ({historyEntries.filter(e=>e.important).length})</button>
@@ -1280,12 +1227,8 @@ const App: React.FC = () => {
               <button onClick={() => { setTranslatorOpen(false); setTab('chat'); }} className="orb" style={{ background:'none', border:'1px solid rgba(34,211,238,0.3)', borderRadius:'8px', color:'rgba(34,211,238,0.6)', padding:'4px 14px', cursor:'pointer', fontSize:'11px' }}>✕ SLUIT</button>
             </div>
             <p style={{ color:'rgba(255,255,255,0.4)', fontSize:'12px', marginBottom:'20px' }}>Typ je prompt, kies een provider. De app vertaalt naar Engels en opent de site.</p>
-            <textarea
-              value={videoPrompt}
-              onChange={(e) => setVideoPrompt(e.target.value)}
-              placeholder="Beschrijf je video in het Nederlands..."
-              className="orb"
-              rows={3}
+            <textarea value={videoPrompt} onChange={(e) => setVideoPrompt(e.target.value)}
+              placeholder="Beschrijf je video in het Nederlands..." className="orb" rows={3}
               style={{ width:'100%', background:'rgba(0,0,0,0.7)', border:'1px solid rgba(34,211,238,0.4)', borderRadius:'12px', padding:'14px 16px', color:'white', outline:'none', resize:'none', fontSize:'13px', marginBottom:'20px' }}
             />
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:'12px' }}>
