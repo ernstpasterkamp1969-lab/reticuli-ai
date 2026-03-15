@@ -1,6 +1,5 @@
 import type { Express } from "express";
 import type { Server } from "http";
-import { GoogleGenAI } from "@google/genai";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -61,9 +60,6 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-// ============================================================
-// HELPERS
-// ============================================================
 function nowIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -101,7 +97,7 @@ async function withRetry<T>(
         err?.cause?.code === "ECONNREFUSED" ||
         err?.cause?.code === "ETIMEDOUT";
       if (isFetchError && attempt < retries) {
-        console.log(`Poging ${attempt}/${retries} mislukt (${err?.cause?.code ?? "fetch failed"}), wacht ${delayMs}ms...`);
+        console.log(`Poging ${attempt}/${retries} mislukt, wacht ${delayMs}ms...`);
         await new Promise((res) => setTimeout(res, delayMs));
       } else {
         throw err;
@@ -112,7 +108,7 @@ async function withRetry<T>(
 }
 
 // ============================================================
-// GEHEUGEN: bouw context string voor systeem prompt
+// GEHEUGEN
 // ============================================================
 function buildMemoryContext(memory: RetiMemory): string {
   const parts: string[] = [];
@@ -127,107 +123,11 @@ function buildMemoryContext(memory: RetiMemory): string {
 }
 
 // ============================================================
-// GEHEUGEN: update na gesprek via Gemini
+// GROQ — tekst
 // ============================================================
-async function updateMemoryFromConversation(
-  messages: Array<{role: string, content: string}>,
-  currentMemory: RetiMemory
-): Promise<void> {
-  try {
-    const convo = messages.slice(-6).map(m =>
-      `${m.role === 'user' ? 'Gebruiker' : 'Reti'}: ${m.content}`
-    ).join('\n');
-
-    const prompt = `
-Analyseer dit gesprek en extraheer persoonlijke informatie over de gebruiker.
-Huidig geheugen: ${JSON.stringify(currentMemory)}
-
-Gesprek:
-${convo}
-
-Geef ALLEEN JSON terug, geen tekst eromheen:
-{
-  "name": "<naam van gebruiker of null als onbekend>",
-  "location": "<woonplaats/locatie of null>",
-  "language": "<voorkeurstaal of null>",
-  "new_interests": ["<nieuw interesse>"],
-  "new_preferences": ["<nieuwe voorkeur>"],
-  "new_facts": ["<nieuw feit over gebruiker>"]
-}
-
-Extraheer ALLEEN wat duidelijk in het gesprek staat. Geen aannames.`;
-
-    const result = await callGemini(prompt);
-    const clean = result.replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(clean);
-
-    if (parsed.name) currentMemory.name = parsed.name;
-    if (parsed.location) currentMemory.location = parsed.location;
-    if (parsed.language) currentMemory.language = parsed.language;
-
-    if (parsed.new_interests?.length) {
-      for (const i of parsed.new_interests) {
-        if (!currentMemory.interests.includes(i)) currentMemory.interests.push(i);
-      }
-    }
-    if (parsed.new_preferences?.length) {
-      for (const p of parsed.new_preferences) {
-        if (!currentMemory.preferences.includes(p)) currentMemory.preferences.push(p);
-      }
-    }
-    if (parsed.new_facts?.length) {
-      for (const f of parsed.new_facts) {
-        if (!currentMemory.facts.includes(f)) currentMemory.facts.push(f);
-      }
-    }
-
-    currentMemory.lastUpdated = new Date().toISOString();
-    saveMemory(currentMemory);
-    console.log("✅ Geheugen bijgewerkt:", currentMemory.name || "onbekend");
-  } catch (e) {
-    console.log("Geheugen update mislukt:", e);
-  }
-}
-
-// ============================================================
-// GEMINI — zonder baseUrl, SDK gebruikt standaard Google endpoint
-// ============================================================
-const gemini = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY,
-});
-
-async function callGemini(prompt: string): Promise<string> {
-  const resp = await withRetry(() =>
-    gemini.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-    })
-  );
-  return resp.text || "";
-}
-
-async function callGeminiVision(prompt: string, base64Image: string, mimeType: string): Promise<string> {
-  const resp = await withRetry(() =>
-    gemini.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: [{
-        role: "user",
-        parts: [
-          { inlineData: { mimeType, data: base64Image } },
-          { text: prompt }
-        ]
-      }],
-    })
-  );
-  return resp.text || "";
-}
-
-// ============================================================
-// GROQ
-// ============================================================
-async function callGroq(messages: Array<{role: string, content: string}>): Promise<string> {
+async function callGroq(messages: Array<{role: string, content: any}>): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error("GROQ_API_KEY niet geconfigureerd in Secrets");
+  if (!apiKey) throw new Error("GROQ_API_KEY niet geconfigureerd");
 
   const response = await withRetry(() =>
     fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -250,30 +150,46 @@ async function callGroq(messages: Array<{role: string, content: string}>): Promi
 }
 
 // ============================================================
-// FAILOVER: probeer Groq eerst, dan Gemini
+// GROQ VISION — foto analyse via llama-4-scout
 // ============================================================
-async function answerWithFailover(
-  messages: Array<{role: string, content: string}>,
-  plainPrompt: string
-): Promise<{ content: string; providerUsed: string; sourceDate: string | null }> {
+async function callGroqVision(prompt: string, base64Image: string, mimeType: string): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error("GROQ_API_KEY niet geconfigureerd");
 
-  try {
-    const text = await callGroq(messages);
-    const dates = extractDates(text);
-    const sourceDate = pickMostRecentDate(dates);
-    return { content: text, providerUsed: "groq", sourceDate };
-  } catch (e) {
-    console.log("Groq mislukt, probeer Gemini:", e);
-  }
+  const response = await withRetry(() =>
+    fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Image}`,
+                },
+              },
+              {
+                type: "text",
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        max_tokens: 1024,
+      }),
+    })
+  );
 
-  try {
-    const text = await callGemini(plainPrompt);
-    const dates = extractDates(text);
-    const sourceDate = pickMostRecentDate(dates);
-    return { content: text, providerUsed: "gemini", sourceDate };
-  } catch (e) {
-    throw new Error("Alle providers mislukt: " + (e instanceof Error ? e.message : String(e)));
-  }
+  const data = await response.json() as any;
+  if (!response.ok) throw new Error(data.error?.message || "Groq Vision fout");
+  return data.choices[0].message.content;
 }
 
 // ============================================================
@@ -284,7 +200,6 @@ async function webSearch(query: string): Promise<string> {
     const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
     const res = await fetch(url);
     const data = await res.json() as any;
-
     let results: string[] = [];
     if (data.Abstract) results.push(data.Abstract);
     if (data.RelatedTopics?.length) {
@@ -314,6 +229,71 @@ function needsWebSearch(message: string): boolean {
   return searchTriggers.some(r => r.test(message));
 }
 
+// ============================================================
+// GEHEUGEN UPDATE via Groq
+// ============================================================
+async function updateMemoryFromConversation(
+  messages: Array<{role: string, content: string}>,
+  currentMemory: RetiMemory
+): Promise<void> {
+  try {
+    const convo = messages.slice(-6).map(m =>
+      `${m.role === 'user' ? 'Gebruiker' : 'Reti'}: ${m.content}`
+    ).join('\n');
+
+    const prompt = `Analyseer dit gesprek en extraheer persoonlijke informatie over de gebruiker.
+Huidig geheugen: ${JSON.stringify(currentMemory)}
+
+Gesprek:
+${convo}
+
+Geef ALLEEN JSON terug, geen tekst eromheen:
+{
+  "name": "<naam van gebruiker of null als onbekend>",
+  "location": "<woonplaats/locatie of null>",
+  "language": "<voorkeurstaal of null>",
+  "new_interests": ["<nieuw interesse>"],
+  "new_preferences": ["<nieuwe voorkeur>"],
+  "new_facts": ["<nieuw feit over gebruiker>"]
+}
+
+Extraheer ALLEEN wat duidelijk in het gesprek staat. Geen aannames.`;
+
+    const result = await callGroq([
+      { role: "system", content: "Je analyseert gesprekken en geeft alleen JSON terug, nooit tekst eromheen." },
+      { role: "user", content: prompt }
+    ]);
+
+    const clean = result.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(clean);
+
+    if (parsed.name) currentMemory.name = parsed.name;
+    if (parsed.location) currentMemory.location = parsed.location;
+    if (parsed.language) currentMemory.language = parsed.language;
+    if (parsed.new_interests?.length) {
+      for (const i of parsed.new_interests) {
+        if (!currentMemory.interests.includes(i)) currentMemory.interests.push(i);
+      }
+    }
+    if (parsed.new_preferences?.length) {
+      for (const p of parsed.new_preferences) {
+        if (!currentMemory.preferences.includes(p)) currentMemory.preferences.push(p);
+      }
+    }
+    if (parsed.new_facts?.length) {
+      for (const f of parsed.new_facts) {
+        if (!currentMemory.facts.includes(f)) currentMemory.facts.push(f);
+      }
+    }
+
+    currentMemory.lastUpdated = new Date().toISOString();
+    saveMemory(currentMemory);
+    console.log("✅ Geheugen bijgewerkt:", currentMemory.name || "onbekend");
+  } catch (e) {
+    console.log("Geheugen update mislukt:", e);
+  }
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
 
   // --- CHAT ---
@@ -333,9 +313,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       let searchContext = "";
       if (needsWebSearch(message)) {
-        console.log("Web search voor:", message);
         searchContext = await webSearch(message);
-        if (searchContext) console.log("Search resultaat gevonden");
       }
 
       const weatherKeywords = /weer|temperature|temperatuur|regen|zon|wind|bewolkt|graden|forecast|weersvoorspelling|morgen.*weer|weer.*morgen|hoe laat.*zon|zonsondergang|zonsopgang|urla|seferihisar|izmir|istanbul|ankara|buiten|paraplu|jas|warm|koud|hot|cold/i;
@@ -357,11 +335,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             sunrise: daily.sunrise[i]?.slice(11),
             sunset: daily.sunset[i]?.slice(11),
           }));
-
           weatherContext = `\n\n[ACTUELE WEERDATA - Seferihisar/Urla regio, Izmir - ${nowIsoDate()}]
 Huidig: ${current.temperature}°C, windsnelheid ${current.windspeed} km/u
 ${days.map((d,i) => `${i===0?'Vandaag':i===1?'Morgen':d.label}: max ${d.max}°C / min ${d.min}°C, neerslag ${d.rain}mm, wind ${d.wind} km/u${i===0?`, zonsopgang ${d.sunrise}, zonsondergang ${d.sunset}`:''}`).join('\n')}
-BELANGRIJK: Gebruik ALLEEN deze actuele data voor weervragen. Negeer je trainingskennis over het weer.`;
+BELANGRIJK: Gebruik ALLEEN deze actuele data voor weervragen.`;
         } catch (e) {
           console.log("Weer API fout:", e);
         }
@@ -372,34 +349,26 @@ BELANGRIJK: Gebruik ALLEEN deze actuele data voor weervragen. Negeer je training
         content: `Je bent Reti (Reticuli), een geavanceerde AI-assistent met een sci-fi persoonlijkheid. 
 Je antwoordt altijd in het Nederlands, tenzij de gebruiker een andere taal spreekt.
 Je bent mysterieus, intelligent en behulpzaam. Vandaag is het ${nowIsoDate()}.
-BELANGRIJK: Verontschuldig je NOOIT dat je geen actuele info hebt. Geef gewoon het beste antwoord dat je kunt.
-Voeg NOOIT zinnen toe zoals "helaas kan ik geen actuele info geven" of "raadpleeg een weersite". Gewoon antwoorden.
+BELANGRIJK: Verontschuldig je NOOIT dat je geen actuele info hebt. Geef gewoon het beste antwoord.
+Voeg NOOIT zinnen toe zoals "helaas kan ik geen actuele info geven". Gewoon antwoorden.
 Eindig NOOIT met [Recentheids-check] of andere technische labels.
 Als je de naam van de gebruiker weet, gebruik die dan af en toe persoonlijk in je antwoord.
-Als een vraag vaag of onduidelijk is, stel dan ÉÉN gerichte vervolgvraag om beter te kunnen helpen. Niet meerdere vragen tegelijk — slechts één, kort en direct.
+Als een vraag vaag is, stel dan ÉÉN gerichte vervolgvraag.
 ${memoryContext}
 ${searchContext ? `Gebruik deze actuele zoekresultaten:\n${searchContext}` : ''}
 ${weatherContext}`
       };
 
       const messages = [systemPrompt, ...(history || []), { role: "user", content: message }];
-      const plainPrompt = `Je bent Reti, een AI assistent. Antwoord in het Nederlands. Vandaag is het ${nowIsoDate()}.
-${memoryContext}
-${searchContext ? `Actuele info:\n${searchContext}` : ''}
-${weatherContext}
-Gebruiker: ${message}`;
-
-      const result = await answerWithFailover(messages, plainPrompt);
-      const cleanContent = result.content.replace(/\n*\[Recentheids-check\][^\n]*/g, '').trim();
+      const text = await callGroq(messages);
+      const cleanContent = text.replace(/\n*\[Recentheids-check\][^\n]*/g, '').trim();
+      const dates = extractDates(cleanContent);
+      const sourceDate = pickMostRecentDate(dates);
 
       const fullHistory = [...(history || []), { role: "user", content: message }, { role: "assistant", content: cleanContent }];
       updateMemoryFromConversation(fullHistory, memory).catch(() => {});
 
-      res.json({
-        content: cleanContent,
-        providerUsed: result.providerUsed,
-        sourceDate: result.sourceDate,
-      });
+      res.json({ content: cleanContent, providerUsed: "groq", sourceDate });
     } catch (err) {
       console.error("Chat error:", err);
       res.status(500).json({ message: err instanceof Error ? err.message : "Server fout" });
@@ -418,7 +387,7 @@ Gebruiker: ${message}`;
     res.json({ cleared: true });
   });
 
-  // --- FOTO ANALYSE ---
+  // --- FOTO ANALYSE via Groq Vision ---
   app.post("/api/analyze-image", async (req, res) => {
     try {
       const { base64Image, mimeType, question } = req.body as {
@@ -435,8 +404,8 @@ Gebruiker: ${message}`;
         ? `Analyseer deze afbeelding en beantwoord de vraag in het Nederlands: ${question}`
         : `Analyseer deze afbeelding uitgebreid in het Nederlands. Beschrijf wat je ziet, identificeer objecten, tekst, personen of plaatsen, en geef relevante informatie zoals Google Lens zou doen.`;
 
-      const text = await callGeminiVision(prompt, base64Image, mimeType || "image/jpeg");
-      res.json({ content: text, providerUsed: "gemini-vision" });
+      const text = await callGroqVision(prompt, base64Image, mimeType || "image/jpeg");
+      res.json({ content: text, providerUsed: "groq-vision" });
     } catch (err) {
       console.error("Image analyze error:", err);
       res.status(500).json({ message: err instanceof Error ? err.message : "Analyse mislukt" });
@@ -474,7 +443,7 @@ Gebruiker: ${message}`;
           { role: "system", content: "Translate the following to English for an AI image generator. Return only the translated prompt, nothing else." },
           { role: "user", content: prompt }
         ]);
-      } catch { }
+      } catch {}
 
       res.json({
         englishPrompt: englishPrompt.trim(),
@@ -517,8 +486,9 @@ Gebruiker: ${message}`;
 
       const convo = messages.map(m => `${m.role === 'user' ? 'Gebruiker' : 'Reti'}: ${m.content}`).join('\n');
 
-      const assessment = await callGemini(`
-Beoordeel dit gesprek. Geef een JSON antwoord (ALLEEN JSON, geen tekst eromheen):
+      const assessment = await callGroq([
+        { role: "system", content: "Je beoordeelt gesprekken en geeft alleen JSON terug, nooit tekst eromheen." },
+        { role: "user", content: `Beoordeel dit gesprek. Geef een JSON antwoord (ALLEEN JSON):
 {
   "score": <getal 1-10 hoe waardevol dit is om te onthouden>,
   "title": "<korte Nederlandse titel max 6 woorden>",
@@ -526,8 +496,8 @@ Beoordeel dit gesprek. Geef een JSON antwoord (ALLEEN JSON, geen tekst eromheen)
 }
 
 Gesprek:
-${convo.slice(0, 2000)}
-      `);
+${convo.slice(0, 2000)}` }
+      ]);
 
       let score = 5, title = "Gesprek", summary = "";
       try {
@@ -541,6 +511,15 @@ ${convo.slice(0, 2000)}
       if (score < 6) return res.json({ saved: false, score });
 
       const entries = loadHistory();
+
+      // Voorkom duplicaten: check of exact hetzelfde gesprek al bestaat
+      const isDuplicate = entries.some(e =>
+        e.messages.length === messages.length &&
+        e.messages[0]?.content === messages[0]?.content &&
+        e.messages[e.messages.length-1]?.content === messages[messages.length-1]?.content
+      );
+      if (isDuplicate) return res.json({ saved: false, reason: "duplicate" });
+
       const entry: ConversationEntry = {
         id: generateId(),
         date: new Date().toISOString(),
@@ -576,11 +555,12 @@ ${convo.slice(0, 2000)}
       if (!messages || messages.length < 2) return res.json({ saved: false });
 
       const convo = messages.map(m => `${m.role === 'user' ? 'Gebruiker' : 'Reti'}: ${m.content}`).join('\n');
-      const assessment = await callGemini(`
-Maak een titel en samenvatting voor dit gesprek. ALLEEN JSON:
+      const assessment = await callGroq([
+        { role: "system", content: "Je maakt titels en samenvattingen en geeft alleen JSON terug." },
+        { role: "user", content: `Maak een titel en samenvatting voor dit gesprek. ALLEEN JSON:
 {"title": "<max 6 woorden>", "summary": "<1-2 zinnen>"}
-${convo.slice(0, 2000)}
-      `);
+${convo.slice(0, 2000)}` }
+      ]);
 
       let title = "Opgeslagen gesprek", summary = "";
       try {
@@ -593,7 +573,8 @@ ${convo.slice(0, 2000)}
       const entries = loadHistory();
       const existing = entries.find(e =>
         e.messages.length === messages.length &&
-        e.messages[0]?.content === messages[0]?.content
+        e.messages[0]?.content === messages[0]?.content &&
+        e.messages[e.messages.length-1]?.content === messages[messages.length-1]?.content
       );
       if (existing) {
         existing.important = true;
