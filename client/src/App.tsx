@@ -529,7 +529,10 @@ const App: React.FC = () => {
     }).then(r => r.json()).then(data => {
       setMessages(prev => {
         const updated = [...prev, { role: 'assistant', content: data.content || data.message }];
-        autoSaveConversation(updated);
+        clearTimeout((window as any)._autoSaveTimer);
+        (window as any)._autoSaveTimer = setTimeout(() => {
+          autoSaveConversation(updated);
+        }, 120000);
         return updated;
       });
       setIsPending(false);
@@ -576,8 +579,11 @@ const App: React.FC = () => {
         if (!res.ok) throw new Error(data.message || 'Chat mislukt');
         setMessages(prev => {
           const updated = [...prev, { role: 'assistant', content: data.content }];
-          autoSaveConversation(updated);
           setRetiVisible(true);
+          clearTimeout((window as any)._autoSaveTimer);
+          (window as any)._autoSaveTimer = setTimeout(() => {
+            autoSaveConversation(updated);
+          }, 120000);
           return updated;
         });
       }
