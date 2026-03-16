@@ -1,0 +1,22 @@
+{
+  "name": "RETICULI AI",
+  "short_name": "RETI",
+  "description": "Reticuli Neural AI System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#22d3ee",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/reti-icoon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/reti-icoon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
